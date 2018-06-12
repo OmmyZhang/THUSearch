@@ -16,12 +16,18 @@ public class PageRank
 
     private static void deal_file(File f, String path) throws Exception
     {
-        //System.out.println(path);
         
         WebNode curNode = WebNode.get_or_create(site, path);
+
+		if(curNode == null)
+		{
+			System.out.println("Warning: html file not in log\n" + site + path + "\n\n");
+			//System.out.println(WebNode.nodeMap);
+			//return;
+		}
         
         Scanner scan = new Scanner(f);
-        Pattern p = Pattern.compile("[\"\'](\\/.*?\\.html)[\"\']");
+		Pattern p = Pattern.compile("[\"\']\\s*(((https?:)?\\/\\/([^\\s\'\"]*?\\.cn))?\\/)?([^\\/\"\'][^\\s\"\']*?)\\.html(\\?([^\\s\"\']*?=[^\\s\"\']*?))?\\s*[\"\']");
         while(scan.hasNext())
         {
             String line = scan.next();
@@ -29,11 +35,52 @@ public class PageRank
             
             while(m.find())
             {
-                String go_in_site_path = m.group(1);
+                String full_site = m.group(1);
+                String go_site = m.group(4);
+                String go_path  = m.group(5);
+                String parm = m.group(7);
+               
+				if(full_site == null) // relative path
+				{
+					go_site = site;
+					int pos = path.lastIndexOf("/");
+					String par_path = path.substring(0,pos+1);
+
+					while(go_path.startsWith("../"))
+					{
+						par_path = par_path.substring(0,pos);
+						pos = par_path.lastIndexOf("/");
+						par_path = par_path.substring(0,pos+1);
+
+						go_path = go_path.substring(3);
+						
+					}
+					go_path = par_path + go_path;
+
+				}
+				else
+				{
+					if(full_site.equals("/"))
+						go_site = site;
+					go_path = "/" + go_path;
+				}
+
+				if(parm == null)
+					go_path = go_path + ".html";
+				else
+					go_path = go_path + parm + ".html";
                 //System.out.println(" : --> " + go_in_site_path);
                 
-                WebNode targetNode = WebNode.get_or_create(site, go_in_site_path);
-                WebEdge.link(curNode, targetNode);
+                WebNode targetNode = WebNode.get_or_create(go_site, go_path);
+				if(targetNode == null)
+				{
+				//	System.out.println("now at: " + site + path);
+				//	System.out.println("ori: " + m.group(0));
+
+					System.out.println("Outside link: (" + go_site + "), (" + go_path + ")");
+				}
+				else
+					WebEdge.link(curNode, targetNode);
             }
         }
         scan.close();
@@ -89,6 +136,7 @@ public class PageRank
     public static void main(String[] args) throws Exception
     {
 		File rootDir = new File(base_data_dir);
+		WebNode.init_map("data/crawl.log");
 
 		sites = new HashSet<String>(Arrays.asList(rootDir.list()));
 		for(String fname:sites)
@@ -98,20 +146,22 @@ public class PageRank
 			site = fname;
 			System.out.println("site: " + site);
 			base = base_data_dir + slash + site;
-			WebNode.init_map();
 			make_graph("");
 		}
 
 		// save if need
 
 		calc_pr();
-        
+       /* 
         for(WebNode wn:WebNode.nodeMap.values())
         {
             System.out.println(String.format("%.6f %d %d %s",wn.pr,wn.d_in,wn.d_out,wn.path));
         }
+		*/
     }
 }
+
+//--------------------------------------
 
 class WebEdge
 {
